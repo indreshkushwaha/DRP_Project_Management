@@ -56,7 +56,11 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
     console.error("Failed to load projects:", e);
   }
 
-  const projectList = Array.isArray(projects) ? projects : [];
+  const projectList = (Array.isArray(projects) ? projects : []).map((p) => ({
+    ...p,
+    createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt ?? ""),
+    updatedAt: p.updatedAt instanceof Date ? p.updatedAt.toISOString() : String(p.updatedAt ?? ""),
+  }));
   const totalPages = Math.ceil(total / limit);
   const columnsToShow =
     columnPref.length > 0

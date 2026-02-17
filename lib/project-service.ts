@@ -1,3 +1,4 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { logAudit } from "./audit";
 import type { Role } from "@prisma/client";
@@ -36,11 +37,9 @@ export type GetProjectsOptions = {
 function buildWhereFromFilters(
   filters: Record<string, string> | undefined,
   allowedFilterKeys: Set<string> | undefined
-):
-  | { status?: string; customFields?: { path: string[]; equals: string }; AND?: unknown[] }
-  | undefined {
+): Prisma.ProjectWhereInput | undefined {
   if (!filters || !allowedFilterKeys || Object.keys(filters).length === 0) return undefined;
-  const conditions: Array<{ status?: string; customFields?: { path: string[]; equals: string } }> = [];
+  const conditions: Prisma.ProjectWhereInput[] = [];
   for (const [key, value] of Object.entries(filters)) {
     const val = value?.trim();
     if (!allowedFilterKeys.has(key) || val === "") continue;
@@ -160,7 +159,7 @@ export async function createProject(
     data: {
       name: String(name).trim(),
       status: String(status || "pending").trim(),
-      customFields,
+      customFields: customFields as Prisma.InputJsonValue,
     },
   });
   await logAudit({
@@ -247,7 +246,7 @@ export async function updateProject(
       where: { id: projectId },
       data: {
         ...(updates as { name?: string; status?: string }),
-        customFields: currentCustom,
+        customFields: currentCustom as Prisma.InputJsonValue,
       },
     });
   }

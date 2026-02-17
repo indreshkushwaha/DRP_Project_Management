@@ -56,8 +56,8 @@ export async function PATCH(
             .split(/[,\n]/)
             .map((o) => o.trim())
             .filter(Boolean)
-            .join(",") || null
-        : null;
+            .join(",") || undefined
+        : undefined;
   }
 
   if (data.key && data.key !== existing.key) {

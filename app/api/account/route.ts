@@ -4,7 +4,7 @@ import { getRole } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 import { getViewableParamsForRole } from "@/lib/project-service";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 export async function GET() {
@@ -143,11 +143,13 @@ async function patchHandler(req: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  const data: Prisma.UserUpdateInput & { dashboardColumnKeys?: string[] | null } = {};
+  const data: Prisma.UserUpdateInput = {};
   if (updates.email !== undefined) data.email = updates.email;
   if (updates.name !== undefined) data.name = updates.name;
   if (updates.passwordHash !== undefined) data.passwordHash = updates.passwordHash;
-  if (updates.dashboardColumnKeys !== undefined) data.dashboardColumnKeys = updates.dashboardColumnKeys;
+  if (updates.dashboardColumnKeys !== undefined) {
+    data.dashboardColumnKeys = updates.dashboardColumnKeys === null ? Prisma.JsonNull : updates.dashboardColumnKeys;
+  }
 
   try {
     await prisma.user.update({

@@ -47,7 +47,7 @@ export async function PATCH(
     updates.email = email.trim().toLowerCase();
   }
   if (typeof name === "string") {
-    updates.name = name.trim() || null;
+    updates.name = name.trim() || undefined;
   }
   if (role === "ADMIN" || role === "MANAGER" || role === "STAFF") {
     updates.role = role;
