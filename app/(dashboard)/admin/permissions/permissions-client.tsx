@@ -22,11 +22,12 @@ export function PermissionsClient() {
 
   useEffect(() => {
     Promise.all([
-      fetch("/api/admin/parameters").then((r) => r.json()),
+      fetch("/api/admin/parameters?page=1&limit=500").then((r) => r.json()),
       fetch("/api/admin/permissions").then((r) => r.json()),
     ])
       .then(([paramsData, permsData]) => {
-        setParams(Array.isArray(paramsData) ? paramsData : []);
+        const paramList = paramsData?.list ?? (Array.isArray(paramsData) ? paramsData : []);
+        setParams(Array.isArray(paramList) ? paramList : []);
         setPermissions(Array.isArray(permsData) ? permsData : []);
       })
       .finally(() => setLoading(false));

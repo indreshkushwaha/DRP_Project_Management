@@ -134,24 +134,28 @@ export function ProjectDetailClient({
     setSaving(false);
   }
 
+  const inputBase =
+    "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm transition-colors placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400";
+  const labelBase = "block text-xs font-semibold uppercase tracking-wide text-zinc-500";
+
   return (
-    <div className="space-y-6">
-      <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-zinc-500">Details</h2>
+    <div className="space-y-8">
+      <div className="rounded-xl border border-zinc-200/80 bg-white p-6 shadow-sm">
+        <div className="mb-6 flex items-center justify-between">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Details</h2>
           <button
             type="button"
             onClick={handleSaveAll}
             disabled={saving}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-zinc-800 disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2"
           >
             {saving ? "Saving…" : "Save"}
           </button>
         </div>
-        <dl className="space-y-3">
+        <dl className="space-y-5">
           <div>
-            <dt className="text-xs text-zinc-500">Name</dt>
-            <dd className="mt-0.5">
+            <dt className={labelBase}>Name</dt>
+            <dd className="mt-1.5">
               <input
                 type="text"
                 value={name}
@@ -160,13 +164,13 @@ export function ProjectDetailClient({
                   const v = e.target.value.trim();
                   if (v !== (lastSaved.name ?? "")) handleUpdate("name", v);
                 }}
-                className="w-full rounded border border-zinc-300 px-2 py-1 text-zinc-900"
+                className={inputBase}
               />
             </dd>
           </div>
           <div>
-            <dt className="text-xs text-zinc-500">Status</dt>
-            <dd className="mt-0.5">
+            <dt className={labelBase}>Status</dt>
+            <dd className="mt-1.5">
               <select
                 value={status}
                 onChange={(e) => {
@@ -174,7 +178,7 @@ export function ProjectDetailClient({
                   setProject((p) => ({ ...p, status: v }));
                   handleUpdate("status", v);
                 }}
-                className="w-full rounded border border-zinc-300 px-2 py-1 text-zinc-900"
+                className={inputBase}
               >
                 <option value="pending">Pending</option>
                 <option value="in_progress">In progress</option>
@@ -189,8 +193,8 @@ export function ProjectDetailClient({
               if (param?.type === "date") {
                 return (
                   <div key={key}>
-                    <dt className="text-xs text-zinc-500">{param.label}</dt>
-                    <dd className="mt-0.5">
+                    <dt className={labelBase}>{param.label}</dt>
+                    <dd className="mt-1.5">
                       <input
                         type="date"
                         value={value}
@@ -201,7 +205,7 @@ export function ProjectDetailClient({
                           const v = e.target.value;
                           if (v !== (lastSaved[key] ?? "")) handleUpdate(key, v);
                         }}
-                        className="w-full rounded border border-zinc-300 px-2 py-1 text-zinc-900"
+                        className={inputBase}
                       />
                     </dd>
                   </div>
@@ -214,8 +218,8 @@ export function ProjectDetailClient({
                   .filter(Boolean);
                 return (
                   <div key={key}>
-                    <dt className="text-xs text-zinc-500">{param.label}</dt>
-                    <dd className="mt-0.5">
+                    <dt className={labelBase}>{param.label}</dt>
+                    <dd className="mt-1.5">
                       <select
                         value={value}
                         onChange={(e) => {
@@ -223,7 +227,7 @@ export function ProjectDetailClient({
                           setProject((p) => ({ ...p, [key]: v }));
                           handleUpdate(key, v);
                         }}
-                        className="w-full rounded border border-zinc-300 px-2 py-1 text-zinc-900"
+                        className={inputBase}
                       >
                         <option value="">—</option>
                         {opts.map((o) => (
@@ -238,8 +242,8 @@ export function ProjectDetailClient({
               }
               return (
                 <div key={key}>
-                  <dt className="text-xs text-zinc-500">{param.label}</dt>
-                  <dd className="mt-0.5">
+                  <dt className={labelBase}>{param.label}</dt>
+                  <dd className="mt-1.5">
                     <input
                       type="text"
                       value={value}
@@ -250,7 +254,7 @@ export function ProjectDetailClient({
                         const v = e.target.value;
                         if (v !== (lastSaved[key] ?? "")) handleUpdate(key, v);
                       }}
-                      className="w-full rounded border border-zinc-300 px-2 py-1 text-zinc-900"
+                      className={inputBase}
                     />
                   </dd>
                 </div>
@@ -259,15 +263,19 @@ export function ProjectDetailClient({
         </dl>
         {message && (
           <p
-            className={`mt-3 text-sm ${message.type === "ok" ? "text-green-600" : "text-red-600"}`}
+            className={`mt-4 rounded-lg px-3 py-2 text-sm font-medium ${
+              message.type === "ok"
+                ? "bg-emerald-50 text-emerald-800"
+                : "bg-red-50 text-red-800"
+            }`}
           >
             {message.text}
           </p>
         )}
       </div>
       {canSeeConfidential && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-          <h2 className="mb-2 text-sm font-medium text-amber-800">
+        <div className="rounded-xl border border-amber-200/80 bg-amber-50/80 p-6">
+          <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-amber-800">
             Confidential notes (Admin only)
           </h2>
           <textarea
@@ -275,7 +283,7 @@ export function ProjectDetailClient({
             onChange={(e) => setConfidential(e.target.value)}
             onBlur={handleConfidentialSave}
             rows={4}
-            className="w-full rounded border border-amber-200 bg-white px-2 py-1 text-zinc-900"
+            className="w-full rounded-lg border border-amber-200/80 bg-white px-3 py-2.5 text-sm text-zinc-900 shadow-sm placeholder:text-zinc-400 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-400"
           />
         </div>
       )}

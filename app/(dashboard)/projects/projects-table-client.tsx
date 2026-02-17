@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ViewableParam } from "@/lib/project-service";
@@ -57,8 +57,8 @@ function FilterTextInput({
     if (local.trim() !== value.trim()) onApply(local);
   };
   return (
-    <label className="flex items-center gap-2">
-      <span className="text-sm text-zinc-600">{label}</span>
+    <label className={label ? "flex items-center gap-2" : "block"}>
+      {label ? <span className="text-sm font-medium text-zinc-600">{label}</span> : null}
       <input
         type="text"
         value={local}
@@ -66,7 +66,7 @@ function FilterTextInput({
         onBlur={apply}
         onKeyDown={(e) => e.key === "Enter" && apply()}
         placeholder="—"
-        className="w-32 rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900 placeholder:text-zinc-400"
+        className={`rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm transition-colors placeholder:text-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400 ${label ? "w-36" : "w-full"}`}
       />
     </label>
   );
@@ -150,13 +150,35 @@ export function ProjectsTableClient({
 
   const hasActiveFilters = Object.keys(currentFilters).length > 0;
   const filtersForPagination = hasActiveFilters ? currentFilters : undefined;
+  const otherFilterColumns = filterableColumns.filter((col) => col.key !== "status");
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const filterPanelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (filterPanelRef.current && !filterPanelRef.current.contains(e.target as Node)) {
+        setFilterPanelOpen(false);
+      }
+    }
+    if (filterPanelOpen) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [filterPanelOpen]);
+
+  function statusBadge(s: string) {
+    const t = String(s ?? "").toLowerCase();
+    if (t === "completed") return "bg-emerald-100 text-emerald-800";
+    if (t === "in_progress") return "bg-blue-100 text-blue-800";
+    return "bg-amber-100 text-amber-800";
+  }
 
   return (
-    <>
-      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-zinc-200 bg-zinc-50/80 px-4 py-3">
-        <span className="text-sm font-medium text-zinc-700">Filters:</span>
-        <label className="flex items-center gap-2">
-          <span className="text-sm text-zinc-600">Status</span>
+    <div className="min-w-0 max-w-full">
+      {/* Toolbar: Filters (left) + Columns (right) */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-zinc-200/80 bg-white px-4 py-3 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Filters</span>
           <select
             value={currentFilters.status ?? ""}
             onChange={(e) => {
@@ -166,7 +188,7 @@ export function ProjectsTableClient({
               else next.status = v;
               router.push(buildProjectsUrl({ page: 1, limit: pagination.limit, filters: next }));
             }}
-            className="rounded border border-zinc-300 bg-white px-2 py-1.5 text-sm text-zinc-900"
+            className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm transition-colors focus:border-zinc-400 focus:outline-none focus:ring-1 focus:ring-zinc-400"
           >
             {STATUS_OPTIONS.map((o) => (
               <option key={o.value || "all"} value={o.value}>
@@ -174,34 +196,67 @@ export function ProjectsTableClient({
               </option>
             ))}
           </select>
-        </label>
-        {filterableColumns
-          .filter((col) => col.key !== "status")
-          .map((col) => (
-            <FilterTextInput
-              key={col.key}
-              label={col.label}
-              value={currentFilters[col.key] ?? ""}
-              onApply={(value) => {
-                const next = { ...currentFilters };
-                if (value.trim() === "") delete next[col.key];
-                else next[col.key] = value.trim();
-                router.push(buildProjectsUrl({ page: 1, limit: pagination.limit, filters: next }));
-              }}
-            />
-          ))}
-        {hasActiveFilters && (
-          <Link
-            href={buildProjectsUrl({ page: 1, limit: pagination.limit })}
-            className="text-sm text-blue-600 hover:underline"
+          {otherFilterColumns.length > 0 && (
+            <div className="relative" ref={filterPanelRef}>
+              <button
+                type="button"
+                onClick={() => setFilterPanelOpen((o) => !o)}
+                className={`flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
+                  hasActiveFilters && Object.keys(currentFilters).some((k) => k !== "status")
+                    ? "border-zinc-300 bg-zinc-50 text-zinc-800"
+                    : "border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
+                }`}
+              >
+                More filters
+                <span className="text-zinc-400">▾</span>
+              </button>
+              {filterPanelOpen && (
+                <div className="absolute left-0 top-full z-10 mt-1.5 w-64 rounded-xl border border-zinc-200 bg-white p-4 shadow-lg">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500">Filter by column</p>
+                  <div className="space-y-3">
+                    {otherFilterColumns.map((col) => (
+                      <div key={col.key}>
+                        <span className="mb-1 block text-xs font-medium text-zinc-600">{col.label}</span>
+                        <FilterTextInput
+                          label=""
+                          value={currentFilters[col.key] ?? ""}
+                          onApply={(value) => {
+                            const next = { ...currentFilters };
+                            if (value.trim() === "") delete next[col.key];
+                            else next[col.key] = value.trim();
+                            router.push(buildProjectsUrl({ page: 1, limit: pagination.limit, filters: next }));
+                          }}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {hasActiveFilters && (
+            <Link
+              href={buildProjectsUrl({ page: 1, limit: pagination.limit })}
+              className="text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-800"
+            >
+              Clear all
+            </Link>
+          )}
+        </div>
+        {viewableParams.length > 0 && (
+          <button
+            type="button"
+            onClick={openModal}
+            className="rounded-lg border border-zinc-200 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-zinc-400 focus:ring-offset-2"
           >
-            Clear all filters
-          </Link>
+            Columns
+          </button>
         )}
       </div>
+
+      {/* Active filter chips */}
       {hasActiveFilters && (
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <span className="text-sm text-zinc-500">Active:</span>
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           {Object.entries(currentFilters).map(([key, value]) => {
             const col = filterableColumns.find((c) => c.key === key);
             const label = col?.label ?? key;
@@ -210,12 +265,12 @@ export function ProjectsTableClient({
             return (
               <span
                 key={key}
-                className="inline-flex items-center gap-1 rounded bg-zinc-200 px-2 py-0.5 text-sm text-zinc-800"
+                className="inline-flex items-center gap-1.5 rounded-full bg-zinc-100 px-3 py-1 text-sm text-zinc-700"
               >
                 {label}: {value}
                 <Link
                   href={buildProjectsUrl({ page: 1, limit: pagination.limit, filters: Object.keys(next).length ? next : undefined })}
-                  className="ml-0.5 font-medium text-zinc-600 hover:text-zinc-900"
+                  className="rounded-full p-0.5 transition-colors hover:bg-zinc-200 hover:text-zinc-900"
                   aria-label={`Remove filter ${label}`}
                 >
                   ×
@@ -225,35 +280,44 @@ export function ProjectsTableClient({
           })}
         </div>
       )}
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-zinc-200">
-          <thead className="bg-zinc-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-zinc-500">Name</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-zinc-500">Status</th>
+
+      {/* Table with horizontal scroll when many columns */}
+      <div className="min-w-0 overflow-x-auto rounded-xl border border-zinc-200/80 bg-white shadow-sm">
+        <table className="w-full divide-y divide-zinc-100" style={{ minWidth: "max-content" }}>
+          <thead>
+            <tr className="bg-zinc-50/90">
+              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Name</th>
+              <th className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">Status</th>
               {columnsToShow.map((p) => (
-                <th key={p.id} className="px-4 py-3 text-left text-xs font-medium uppercase text-zinc-500">
+                <th key={p.id} className="px-5 py-3.5 text-left text-xs font-semibold uppercase tracking-wider text-zinc-500">
                   {p.label}
                 </th>
               ))}
-              <th className="px-4 py-3 text-right text-xs font-medium uppercase text-zinc-500">Updated</th>
+              <th className="px-5 py-3.5 text-right text-xs font-semibold uppercase tracking-wider text-zinc-500">Updated</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-zinc-200">
+          <tbody className="divide-y divide-zinc-100">
             {projects.map((p) => (
-              <tr key={p.id} className="hover:bg-zinc-50">
-                <td className="px-4 py-3">
-                  <Link href={`/projects/${p.id}`} className="font-medium text-blue-600 hover:underline">
+              <tr key={p.id} className="transition-colors hover:bg-zinc-50/80">
+                <td className="px-5 py-3.5">
+                  <Link
+                    href={`/projects/${p.id}`}
+                    className="font-medium text-zinc-900 transition-colors hover:text-zinc-600"
+                  >
                     {String(p.name ?? "")}
                   </Link>
                 </td>
-                <td className="px-4 py-3 text-zinc-600">{String(p.status ?? "")}</td>
+                <td className="px-5 py-3.5">
+                  <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadge(String(p.status ?? ""))}`}>
+                    {String(p.status ?? "").replace("_", " ")}
+                  </span>
+                </td>
                 {columnsToShow.map((col) => (
-                  <td key={col.id} className="px-4 py-3 text-zinc-600">
-                    {String(p[col.key] ?? "")}
+                  <td key={col.id} className="px-5 py-3.5 text-sm text-zinc-600">
+                    {String(p[col.key] ?? "—")}
                   </td>
                 ))}
-                <td className="px-4 py-3 text-right text-sm text-zinc-500">
+                <td className="px-5 py-3.5 text-right text-sm text-zinc-500">
                   {new Date(String(p.updatedAt ?? "")).toLocaleDateString("en-US")}
                 </td>
               </tr>
@@ -261,16 +325,18 @@ export function ProjectsTableClient({
           </tbody>
         </table>
         {projects.length === 0 && (
-          <p className="px-4 py-8 text-center text-zinc-500">No projects yet.</p>
+          <div className="px-5 py-16 text-center">
+            <p className="text-zinc-500">No projects yet.</p>
+            <p className="mt-1 text-sm text-zinc-400">Create one to get started.</p>
+          </div>
         )}
       </div>
       {pagination.totalPages > 1 && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-zinc-200 px-4 py-3">
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-zinc-200/80 bg-white px-5 py-4 shadow-sm">
           <p className="text-sm text-zinc-600">
-            Showing {(pagination.page - 1) * pagination.limit + 1}–
-            {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total}
+            Showing <span className="font-medium text-zinc-900">{(pagination.page - 1) * pagination.limit + 1}–{Math.min(pagination.page * pagination.limit, pagination.total)}</span> of <span className="font-medium text-zinc-900">{pagination.total}</span>
           </p>
-          <nav className="flex items-center gap-1" aria-label="Pagination">
+          <nav className="flex items-center gap-2" aria-label="Pagination">
             {pagination.page > 1 ? (
               <Link
                 href={buildProjectsUrl({
@@ -278,14 +344,14 @@ export function ProjectsTableClient({
                   limit: pagination.limit,
                   filters: filtersForPagination,
                 })}
-                className="rounded border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 hover:border-zinc-300"
               >
                 Previous
               </Link>
             ) : (
-              <span className="rounded border border-zinc-200 px-3 py-1.5 text-sm text-zinc-400">Previous</span>
+              <span className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 text-sm text-zinc-400">Previous</span>
             )}
-            <span className="px-2 text-sm text-zinc-500">
+            <span className="min-w-[7rem] px-3 py-2 text-center text-sm text-zinc-600">
               Page {pagination.page} of {pagination.totalPages}
             </span>
             {pagination.page < pagination.totalPages ? (
@@ -295,82 +361,71 @@ export function ProjectsTableClient({
                   limit: pagination.limit,
                   filters: filtersForPagination,
                 })}
-                className="rounded border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
+                className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 hover:border-zinc-300"
               >
                 Next
               </Link>
             ) : (
-              <span className="rounded border border-zinc-200 px-3 py-1.5 text-sm text-zinc-400">Next</span>
+              <span className="rounded-lg border border-zinc-100 bg-zinc-50 px-3 py-2 text-sm text-zinc-400">Next</span>
             )}
           </nav>
         </div>
       )}
-      {viewableParams.length > 0 && (
-        <>
-          <button
-            type="button"
-            onClick={openModal}
-            className="mt-3 rounded border border-zinc-300 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-          >
-            Choose columns
-          </button>
-          {modalOpen && (
-            <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/50">
-              <div className="w-full max-w-sm rounded-lg bg-white p-6 shadow-lg">
-                <h2 className="mb-4 font-semibold text-zinc-900">Choose columns</h2>
-                <p className="mb-3 text-sm text-zinc-500">Select which parameters to show in the table.</p>
-                <div className="mb-4 max-h-60 space-y-2 overflow-y-auto">
+      {modalOpen && (
+            <div className="fixed inset-0 z-20 flex items-center justify-center bg-zinc-900/40 p-4 backdrop-blur-sm">
+              <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
+                <h2 className="text-lg font-semibold text-zinc-900">Choose columns</h2>
+                <p className="mt-1 text-sm text-zinc-500">Select which parameters to show in the table.</p>
+                <div className="mt-4 max-h-64 space-y-2 overflow-y-auto rounded-lg border border-zinc-100 bg-zinc-50/50 p-3">
                   {viewableParams.map((p) => (
-                    <label key={p.id} className="flex cursor-pointer items-center gap-2">
+                    <label key={p.id} className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-1.5 transition-colors hover:bg-white">
                       <input
                         type="checkbox"
                         checked={selectedKeys.has(p.key)}
                         onChange={() => toggleKey(p.key)}
-                        className="rounded border-zinc-300"
+                        className="h-4 w-4 rounded border-zinc-300 text-zinc-900 focus:ring-zinc-500"
                       />
-                      <span className="text-sm text-zinc-800">{p.label}</span>
+                      <span className="text-sm font-medium text-zinc-800">{p.label}</span>
                     </label>
                   ))}
                 </div>
-                <div className="mb-4 flex gap-2">
+                <div className="mt-4 flex gap-2">
                   <button
                     type="button"
                     onClick={selectAll}
-                    className="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-50"
+                    className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100"
                   >
                     Select all
                   </button>
                   <button
                     type="button"
                     onClick={clearAll}
-                    className="rounded border border-zinc-300 px-2 py-1 text-xs text-zinc-600 hover:bg-zinc-50"
+                    className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-600 transition-colors hover:bg-zinc-100"
                   >
                     Clear
                   </button>
                 </div>
-                {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-                <div className="flex gap-2">
+                {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+                <div className="mt-5 flex justify-end gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setModalOpen(false)}
+                    className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-50"
+                  >
+                    Cancel
+                  </button>
                   <button
                     type="button"
                     onClick={handleSave}
                     disabled={saving}
-                    className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                    className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800 disabled:opacity-50"
                   >
                     {saving ? "Saving…" : "Save"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setModalOpen(false)}
-                    className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
-                  >
-                    Cancel
                   </button>
                 </div>
               </div>
             </div>
-          )}
-        </>
       )}
-    </>
+    </div>
   );
 }

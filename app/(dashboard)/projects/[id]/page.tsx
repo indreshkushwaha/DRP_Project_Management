@@ -19,13 +19,14 @@ export default async function ProjectDetailPage({
   if (!project) notFound();
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <Link href="/projects" className="text-sm text-zinc-500 hover:text-zinc-700">
-          ← Projects
-        </Link>
-      </div>
-      <h1 className="mb-6 text-2xl font-semibold text-zinc-900">
+    <div className="min-w-0">
+      <Link
+        href="/projects"
+        className="mb-6 inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900"
+      >
+        ← Back to projects
+      </Link>
+      <h1 className="mb-8 mt-2 text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
         {(project as { name?: string }).name}
       </h1>
       <ProjectDetailClient

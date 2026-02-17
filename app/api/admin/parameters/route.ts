@@ -4,15 +4,28 @@ import { canAccessAdmin } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
 
-export async function GET() {
+const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 100;
+
+export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user?.id || !canAccessAdmin(session)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
-  const list = await prisma.projectParameter.findMany({
-    orderBy: { order: "asc" },
-  });
-  return NextResponse.json(list);
+  const { searchParams } = new URL(req.url);
+  const page = Math.max(1, parseInt(searchParams.get("page") ?? "1", 10) || 1);
+  const limit = Math.min(MAX_LIMIT, Math.max(1, parseInt(searchParams.get("limit") ?? String(DEFAULT_LIMIT), 10) || DEFAULT_LIMIT));
+  const skip = (page - 1) * limit;
+  const [list, total] = await Promise.all([
+    prisma.projectParameter.findMany({
+      orderBy: { order: "asc" },
+      skip,
+      take: limit,
+    }),
+    prisma.projectParameter.count(),
+  ]);
+  const totalPages = Math.ceil(total / limit);
+  return NextResponse.json({ list, total, page, limit, totalPages });
 }
 
 export async function POST(req: Request) {

@@ -66,12 +66,15 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
       : viewableParams;
 
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-zinc-900">Projects</h1>
+    <div className="min-w-0">
+      <div className="mb-8 flex items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">Projects</h1>
+          <p className="mt-1 text-sm text-zinc-500">View and manage your projects</p>
+        </div>
         <Link
           href="/projects/new"
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+          className="shrink-0 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-zinc-500 focus:ring-offset-2"
         >
           New project
         </Link>

@@ -2,25 +2,41 @@
 
 import { useState, useEffect } from "react";
 
+const LIMIT = 20;
+
 type Param = { id: string; key: string; label: string; type: string; order: number; options?: string | null };
 
 export function ParametersClient() {
   const [params, setParams] = useState<Param[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
   const [modal, setModal] = useState<Param | "new" | null>(null);
   const [form, setForm] = useState({ key: "", label: "", type: "text", order: 0, options: "" });
   const [error, setError] = useState("");
 
-  function load() {
-    fetch("/api/admin/parameters")
+  function load(pageNum = page) {
+    setLoading(true);
+    fetch(`/api/admin/parameters?page=${pageNum}&limit=${LIMIT}`)
       .then((r) => r.json())
-      .then((data) => setParams(Array.isArray(data) ? data : []))
+      .then((data) => {
+        if (data?.list) {
+          setParams(Array.isArray(data.list) ? data.list : []);
+          setTotal(data.total ?? 0);
+          setTotalPages(data.totalPages ?? 0);
+        } else {
+          setParams([]);
+          setTotal(0);
+          setTotalPages(0);
+        }
+      })
       .finally(() => setLoading(false));
   }
 
   useEffect(() => {
-    load();
-  }, []);
+    load(page);
+  }, [page]);
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
@@ -48,7 +64,8 @@ export function ParametersClient() {
     }
     setModal(null);
     setForm({ key: "", label: "", type: "text", order: 0, options: "" });
-    load();
+    setPage(1);
+    load(1);
   }
 
   async function handleUpdate(e: React.FormEvent, param: Param) {
@@ -75,7 +92,7 @@ export function ParametersClient() {
       return;
     }
     setModal(null);
-    load();
+    load(page);
   }
 
   async function handleDelete(param: Param) {
@@ -83,11 +100,11 @@ export function ParametersClient() {
     const res = await fetch(`/api/admin/parameters/${param.id}`, { method: "DELETE" });
     if (res.ok) {
       setModal(null);
-      load();
+      load(page);
     }
   }
 
-  if (loading) return <p className="text-zinc-500">Loading…</p>;
+  if (loading && params.length === 0) return <p className="text-zinc-500">Loading…</p>;
 
   return (
     <div className="space-y-4">
@@ -127,6 +144,34 @@ export function ParametersClient() {
           </tbody>
         </table>
       </div>
+      {totalPages > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-zinc-200/80 bg-white px-4 py-3 shadow-sm">
+          <p className="text-sm text-zinc-600">
+            Showing {(page - 1) * LIMIT + 1}–{Math.min(page * LIMIT, total)} of {total}
+          </p>
+          <nav className="flex items-center gap-2" aria-label="Pagination">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1}
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 disabled:opacity-50 disabled:pointer-events-none"
+            >
+              Previous
+            </button>
+            <span className="px-3 text-sm text-zinc-600">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages}
+              className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50 disabled:opacity-50 disabled:pointer-events-none"
+            >
+              Next
+            </button>
+          </nav>
+        </div>
+      )}
       {modal === "new" && (
         <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-lg">
