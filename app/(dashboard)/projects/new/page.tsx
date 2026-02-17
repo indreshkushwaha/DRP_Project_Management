@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 
 export default function NewProjectPage() {
   const router = useRouter();
-  const [params, setParams] = useState<Array<{ id: string; key: string; label: string; type: string }>>([]);
+  const [params, setParams] = useState<
+    Array<{ id: string; key: string; label: string; type: string; options?: string | null }>
+  >([]);
   const [name, setName] = useState("");
   const [status, setStatus] = useState("pending");
   const [custom, setCustom] = useState<Record<string, string>>({});
@@ -79,17 +81,55 @@ export default function NewProjectPage() {
             <option value="completed">Completed</option>
           </select>
         </div>
-        {params.map((p) => (
-          <div key={p.id}>
-            <label className="mb-1 block text-sm font-medium text-zinc-700">{p.label}</label>
-            <input
-              type={p.type === "number" ? "number" : "text"}
-              value={custom[p.key] ?? ""}
-              onChange={(e) => setCustom((c) => ({ ...c, [p.key]: e.target.value }))}
-              className="w-full rounded border border-zinc-300 px-3 py-2 text-zinc-900"
-            />
-          </div>
-        ))}
+        {params.map((p) => {
+          const opts = (p.options ?? "")
+            .split(",")
+            .map((o) => o.trim())
+            .filter(Boolean);
+          if (p.type === "date") {
+            return (
+              <div key={p.id}>
+                <label className="mb-1 block text-sm font-medium text-zinc-700">{p.label}</label>
+                <input
+                  type="date"
+                  value={custom[p.key] ?? ""}
+                  onChange={(e) => setCustom((c) => ({ ...c, [p.key]: e.target.value }))}
+                  className="w-full rounded border border-zinc-300 px-3 py-2 text-zinc-900"
+                />
+              </div>
+            );
+          }
+          if (p.type === "select") {
+            return (
+              <div key={p.id}>
+                <label className="mb-1 block text-sm font-medium text-zinc-700">{p.label}</label>
+                <select
+                  value={custom[p.key] ?? ""}
+                  onChange={(e) => setCustom((c) => ({ ...c, [p.key]: e.target.value }))}
+                  className="w-full rounded border border-zinc-300 px-3 py-2 text-zinc-900"
+                >
+                  <option value="">—</option>
+                  {opts.map((o) => (
+                    <option key={o} value={o}>
+                      {o}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          }
+          return (
+            <div key={p.id}>
+              <label className="mb-1 block text-sm font-medium text-zinc-700">{p.label}</label>
+              <input
+                type={p.type === "number" ? "number" : "text"}
+                value={custom[p.key] ?? ""}
+                onChange={(e) => setCustom((c) => ({ ...c, [p.key]: e.target.value }))}
+                className="w-full rounded border border-zinc-300 px-3 py-2 text-zinc-900"
+              />
+            </div>
+          );
+        })}
         {error && <p className="text-sm text-red-600">{error}</p>}
         <div className="flex gap-2">
           <button

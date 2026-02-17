@@ -1,16 +1,53 @@
 import { auth } from "@/auth";
-import { getProjectsForRole } from "@/lib/project-service";
+import { getProjectsForRole, getViewableParamsForRole } from "@/lib/project-service";
 import { getRole } from "@/lib/auth";
 import Link from "next/link";
 
-export default async function DashboardPage() {
+const DASHBOARD_PROJECT_LIMIT = 50;
+const PAGINATION_KEYS = new Set(["page", "limit"]);
+
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+function parseFilters(
+  params: Record<string, string | string[] | undefined>,
+  allowedFilterKeys: Set<string>
+): Record<string, string> {
+  const filters: Record<string, string> = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (PAGINATION_KEYS.has(key) || !allowedFilterKeys.has(key)) continue;
+    const v = Array.isArray(value) ? value[0] : value;
+    if (typeof v === "string" && v.trim() !== "") filters[key] = v.trim();
+  }
+  return filters;
+}
+
+function buildFilteredProjectsUrl(filters: Record<string, string>): string {
+  if (Object.keys(filters).length === 0) return "/projects";
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(filters)) {
+    if (v.trim() !== "") params.set(k, v.trim());
+  }
+  return `/projects?${params.toString()}`;
+}
+
+export default async function DashboardPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await auth();
   if (!session?.user) return null;
   const role = getRole(session);
   if (!role) return null;
-  let projects: Awaited<ReturnType<typeof getProjectsForRole>>;
+
+  const viewableParams = await getViewableParamsForRole(role).catch(() => []);
+  const allowedFilterKeys = new Set<string>(["status", ...viewableParams.map((p) => p.key)]);
+  const params = await searchParams;
+  const filters = parseFilters(params ?? {}, allowedFilterKeys);
+
+  let projects: Awaited<ReturnType<typeof getProjectsForRole>> = [];
   try {
-    projects = await getProjectsForRole(role);
+    projects = await getProjectsForRole(role, {
+      filters,
+      allowedFilterKeys,
+      limit: DASHBOARD_PROJECT_LIMIT,
+    });
   } catch {
     projects = [];
   }
@@ -25,9 +62,19 @@ export default async function DashboardPage() {
     {} as Record<string, number>
   );
 
+  const hasFilters = Object.keys(filters).length > 0;
+
   return (
     <div>
       <h1 className="mb-6 text-2xl font-semibold text-zinc-900">Dashboard</h1>
+      {hasFilters && (
+        <p className="mb-4 text-sm text-zinc-600">
+          Showing filtered view.{" "}
+          <Link href={buildFilteredProjectsUrl(filters)} className="text-blue-600 hover:underline">
+            View filtered projects
+          </Link>
+        </p>
+      )}
       <div className="mb-8 flex gap-4">
         {Object.entries(byStatus).map(([status, count]) => (
           <div
@@ -56,13 +103,16 @@ export default async function DashboardPage() {
             </li>
           ))}
         </ul>
-        {projectList.length > 10 && (
+        {projectList.length > 10 ? (
           <div className="px-4 py-2 text-center text-sm text-zinc-500">
-            <Link href="/projects" className="text-blue-600 hover:underline">
+            <Link
+              href={hasFilters ? buildFilteredProjectsUrl(filters) : "/projects"}
+              className="text-blue-600 hover:underline"
+            >
               View all projects
             </Link>
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );

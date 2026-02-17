@@ -1,9 +1,23 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
 
 type Project = Record<string, unknown>;
+
+type Param = { id: string; key: string; label: string; type: string; options?: string | null };
+
+function projectToLastSaved(p: Project): Record<string, string> {
+  const out: Record<string, string> = {
+    name: String(p.name ?? ""),
+    status: String(p.status ?? "pending"),
+  };
+  for (const [k, v] of Object.entries(p)) {
+    if (k !== "name" && k !== "status" && k !== "id" && k !== "createdAt" && k !== "updatedAt" && k !== "confidentialNotes") {
+      out[k] = String(v ?? "");
+    }
+  }
+  return out;
+}
 
 export function ProjectDetailClient({
   projectId,
@@ -16,17 +30,30 @@ export function ProjectDetailClient({
   role: string;
   canSeeConfidential: boolean;
 }) {
-  const router = useRouter();
   const [project, setProject] = useState(initialProject);
+  const [params, setParams] = useState<Param[]>([]);
   const [confidential, setConfidential] = useState(
     String(initialProject.confidentialNotes ?? "")
   );
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [lastSaved, setLastSaved] = useState<Record<string, string>>(() =>
+    projectToLastSaved(initialProject)
+  );
+
+  useEffect(() => {
+    setLastSaved(projectToLastSaved(initialProject));
+  }, [projectId]);
+
+  useEffect(() => {
+    fetch("/api/parameters")
+      .then((r) => (r.ok ? r.json() : []))
+      .then((list) => setParams(Array.isArray(list) ? list : []))
+      .catch(() => setParams([]));
+  }, []);
 
   const name = String(project.name ?? "");
   const status = String(project.status ?? "pending");
-  const skipKeys = ["id", "name", "status", "createdAt", "updatedAt", "confidentialNotes"];
 
   async function handleUpdate(field: string, value: string) {
     setMessage(null);
@@ -45,6 +72,39 @@ export function ProjectDetailClient({
         return;
       }
       setProject(data);
+      setLastSaved((prev) => ({ ...prev, [field]: value }));
+      setMessage({ type: "ok", text: "Saved." });
+    } catch {
+      setMessage({ type: "err", text: "Request failed" });
+    }
+    setSaving(false);
+  }
+
+  async function handleSaveAll() {
+    setMessage(null);
+    setSaving(true);
+    const body: Record<string, unknown> = {
+      name: String(project.name ?? "").trim(),
+      status: String(project.status ?? "pending").trim(),
+    };
+    for (const param of params) {
+      const v = project[param.key];
+      body[param.key] = v === undefined || v === null ? "" : String(v);
+    }
+    try {
+      const res = await fetch(`/api/projects/${projectId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setMessage({ type: "err", text: data.error ?? "Update failed" });
+        setSaving(false);
+        return;
+      }
+      setProject(data);
+      setLastSaved(projectToLastSaved(data));
       setMessage({ type: "ok", text: "Saved." });
     } catch {
       setMessage({ type: "err", text: "Request failed" });
@@ -77,7 +137,17 @@ export function ProjectDetailClient({
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
-        <h2 className="mb-4 text-sm font-medium text-zinc-500">Details</h2>
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-sm font-medium text-zinc-500">Details</h2>
+          <button
+            type="button"
+            onClick={handleSaveAll}
+            disabled={saving}
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "Save"}
+          </button>
+        </div>
         <dl className="space-y-3">
           <div>
             <dt className="text-xs text-zinc-500">Name</dt>
@@ -86,7 +156,10 @@ export function ProjectDetailClient({
                 type="text"
                 value={name}
                 onChange={(e) => setProject((p) => ({ ...p, name: e.target.value }))}
-                onBlur={(e) => e.target.value !== name && handleUpdate("name", e.target.value)}
+                onBlur={(e) => {
+                  const v = e.target.value.trim();
+                  if (v !== (lastSaved.name ?? "")) handleUpdate("name", v);
+                }}
                 className="w-full rounded border border-zinc-300 px-2 py-1 text-zinc-900"
               />
             </dd>
@@ -109,27 +182,80 @@ export function ProjectDetailClient({
               </select>
             </dd>
           </div>
-          {Object.entries(project)
-            .filter(([k]) => !skipKeys.includes(k))
-            .map(([key, val]) => (
-              <div key={key}>
-                <dt className="text-xs text-zinc-500">{key}</dt>
-                <dd className="mt-0.5">
-                  <input
-                    type="text"
-                    value={String(val ?? "")}
-                    onChange={(e) =>
-                      setProject((p) => ({ ...p, [key]: e.target.value }))
-                    }
-                    onBlur={(e) =>
-                      String(project[key]) !== e.target.value &&
-                      handleUpdate(key, e.target.value)
-                    }
-                    className="w-full rounded border border-zinc-300 px-2 py-1 text-zinc-900"
-                  />
-                </dd>
-              </div>
-            ))}
+          {params.map((param) => {
+              const key = param.key;
+              const val = project[key];
+              const value = String(val ?? "");
+              if (param?.type === "date") {
+                return (
+                  <div key={key}>
+                    <dt className="text-xs text-zinc-500">{param.label}</dt>
+                    <dd className="mt-0.5">
+                      <input
+                        type="date"
+                        value={value}
+                        onChange={(e) =>
+                          setProject((p) => ({ ...p, [key]: e.target.value }))
+                        }
+                        onBlur={(e) => {
+                          const v = e.target.value;
+                          if (v !== (lastSaved[key] ?? "")) handleUpdate(key, v);
+                        }}
+                        className="w-full rounded border border-zinc-300 px-2 py-1 text-zinc-900"
+                      />
+                    </dd>
+                  </div>
+                );
+              }
+              if (param?.type === "select") {
+                const opts = (param.options ?? "")
+                  .split(",")
+                  .map((o) => o.trim())
+                  .filter(Boolean);
+                return (
+                  <div key={key}>
+                    <dt className="text-xs text-zinc-500">{param.label}</dt>
+                    <dd className="mt-0.5">
+                      <select
+                        value={value}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setProject((p) => ({ ...p, [key]: v }));
+                          handleUpdate(key, v);
+                        }}
+                        className="w-full rounded border border-zinc-300 px-2 py-1 text-zinc-900"
+                      >
+                        <option value="">—</option>
+                        {opts.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    </dd>
+                  </div>
+                );
+              }
+              return (
+                <div key={key}>
+                  <dt className="text-xs text-zinc-500">{param.label}</dt>
+                  <dd className="mt-0.5">
+                    <input
+                      type="text"
+                      value={value}
+                      onChange={(e) =>
+                        setProject((p) => ({ ...p, [key]: e.target.value }))
+                      }
+                      onBlur={(e) => {
+                        const v = e.target.value;
+                        if (v !== (lastSaved[key] ?? "")) handleUpdate(key, v);
+                      }}
+                      className="w-full rounded border border-zinc-300 px-2 py-1 text-zinc-900"
+                    />
+                  </dd>
+                </div>
+              );
+            })}
         </dl>
         {message && (
           <p

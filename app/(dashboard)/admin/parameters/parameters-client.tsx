@@ -2,13 +2,13 @@
 
 import { useState, useEffect } from "react";
 
-type Param = { id: string; key: string; label: string; type: string; order: number };
+type Param = { id: string; key: string; label: string; type: string; order: number; options?: string | null };
 
 export function ParametersClient() {
   const [params, setParams] = useState<Param[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<Param | "new" | null>(null);
-  const [form, setForm] = useState({ key: "", label: "", type: "text", order: 0 });
+  const [form, setForm] = useState({ key: "", label: "", type: "text", order: 0, options: "" });
   const [error, setError] = useState("");
 
   function load() {
@@ -25,10 +25,21 @@ export function ParametersClient() {
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    const optionsNorm = form.options
+      .split(/[,\n]/)
+      .map((o) => o.trim())
+      .filter(Boolean)
+      .join(",");
     const res = await fetch("/api/admin/parameters", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({
+        key: form.key,
+        label: form.label,
+        type: form.type,
+        order: form.order,
+        options: form.type === "select" ? optionsNorm : undefined,
+      }),
     });
     const data = await res.json();
     if (!res.ok) {
@@ -36,7 +47,7 @@ export function ParametersClient() {
       return;
     }
     setModal(null);
-    setForm({ key: "", label: "", type: "text", order: 0 });
+    setForm({ key: "", label: "", type: "text", order: 0, options: "" });
     load();
   }
 
@@ -47,10 +58,16 @@ export function ParametersClient() {
     const label = (target.querySelector('[name="label"]') as HTMLInputElement)?.value;
     const type = (target.querySelector('[name="type"]') as HTMLSelectElement)?.value;
     const order = Number((target.querySelector('[name="order"]') as HTMLInputElement)?.value);
+    const options = (target.querySelector('[name="options"]') as HTMLInputElement | HTMLTextAreaElement)?.value ?? "";
+    const optionsNorm = options
+      .split(/[,\n]/)
+      .map((o) => o.trim())
+      .filter(Boolean)
+      .join(",");
     const res = await fetch(`/api/admin/parameters/${param.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ label, type, order }),
+      body: JSON.stringify({ label, type, order, options: optionsNorm }),
     });
     if (!res.ok) {
       const data = await res.json();
@@ -141,6 +158,18 @@ export function ParametersClient() {
                 <option value="date">Date</option>
                 <option value="select">Select</option>
               </select>
+              {form.type === "select" && (
+                <div>
+                  <label className="mb-1 block text-sm text-zinc-600">Options (comma-separated)</label>
+                  <textarea
+                    placeholder="e.g. active, inactive"
+                    value={form.options}
+                    onChange={(e) => setForm((f) => ({ ...f, options: e.target.value }))}
+                    rows={2}
+                    className="w-full rounded border px-3 py-2"
+                  />
+                </div>
+              )}
               {error && <p className="text-sm text-red-600">{error}</p>}
               <div className="flex gap-2">
                 <button type="submit" className="rounded bg-blue-600 px-4 py-2 text-white">Create</button>
@@ -163,6 +192,18 @@ export function ParametersClient() {
                 <option value="date">Date</option>
                 <option value="select">Select</option>
               </select>
+              {modal.type === "select" && (
+                <div>
+                  <label className="mb-1 block text-sm text-zinc-600">Options (comma-separated)</label>
+                  <textarea
+                    name="options"
+                    defaultValue={modal.options ?? ""}
+                    placeholder="e.g. active, inactive"
+                    rows={2}
+                    className="w-full rounded border px-3 py-2"
+                  />
+                </div>
+              )}
               <input type="number" name="order" defaultValue={modal.order} className="w-full rounded border px-3 py-2" />
               {error && <p className="text-sm text-red-600">{error}</p>}
               <div className="flex gap-2">

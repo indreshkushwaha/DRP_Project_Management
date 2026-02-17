@@ -22,13 +22,14 @@ enum MessagePriority {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String
-  name         String?
-  role         Role
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  email               String    @unique
+  passwordHash         String
+  name                String?
+  role                 Role
+  dashboardColumnKeys  Json?     // array of parameter keys to show on projects table; null/empty = show all viewable
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   sentMessages    Message[]       @relation("MessageSender")
   notifications   Notification[]
@@ -51,6 +52,7 @@ model ProjectParameter {
   key       String   @unique  // e.g. dueDate, assignee
   label     String
   type      String   // text, number, date, select
+  options   String?  // comma-separated values for type select (e.g. active,inactive)
   order     Int      @default(0)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

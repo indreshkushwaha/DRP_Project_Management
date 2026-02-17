@@ -14,7 +14,12 @@ export function UsersClient() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [modal, setModal] = useState<"create" | User | null>(null);
-  const [form, setForm] = useState({ email: "", password: "", name: "", role: "STAFF" as const });
+  const [form, setForm] = useState<{
+    email: string;
+    password: string;
+    name: string;
+    role: "ADMIN" | "MANAGER" | "STAFF";
+  }>({ email: "", password: "", name: "", role: "STAFF" });
   const [error, setError] = useState("");
 
   function load() {

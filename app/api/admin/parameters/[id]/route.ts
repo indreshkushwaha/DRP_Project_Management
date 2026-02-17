@@ -28,15 +28,37 @@ export async function PATCH(
   }
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
-  const { key, label, type, order } = body as { key?: string; label?: string; type?: string; order?: number };
+  const { key, label, type, order, options } = body as {
+    key?: string;
+    label?: string;
+    type?: string;
+    order?: number;
+    options?: string;
+  };
   const existing = await prisma.projectParameter.findUnique({ where: { id } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const data: { key?: string; label?: string; type?: string; order?: number } = {};
+  const data: {
+    key?: string;
+    label?: string;
+    type?: string;
+    order?: number;
+    options?: string;
+  } = {};
   if (typeof key === "string" && key.trim()) data.key = key.trim();
   if (typeof label === "string") data.label = label.trim();
   if (typeof type === "string") data.type = type.trim();
   if (typeof order === "number") data.order = order;
+  if (options !== undefined) {
+    data.options =
+      typeof options === "string"
+        ? options
+            .split(/[,\n]/)
+            .map((o) => o.trim())
+            .filter(Boolean)
+            .join(",") || null
+        : null;
+  }
 
   if (data.key && data.key !== existing.key) {
     const conflict = await prisma.projectParameter.findUnique({ where: { key: data.key } });

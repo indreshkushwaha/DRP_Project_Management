@@ -68,7 +68,7 @@ export function InboxClient() {
                 </div>
                 <span className="text-sm text-zinc-500">
                   {m.sender?.name ?? m.sender?.email ?? "—"} ·{" "}
-                  {new Date(m.createdAt).toLocaleDateString()}
+                  {new Date(m.createdAt).toLocaleDateString("en-US")}
                 </span>
               </Link>
             </li>

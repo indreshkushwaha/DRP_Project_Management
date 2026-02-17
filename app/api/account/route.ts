@@ -1,43 +1,78 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
+import { getRole } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { logAudit } from "@/lib/audit";
+import { getViewableParamsForRole } from "@/lib/project-service";
+import type { Prisma } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 export async function GET() {
-  const session = await auth();
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true, email: true, name: true, role: true, dashboardColumnKeys: true } as { id: boolean; email: boolean; name: boolean; role: boolean; dashboardColumnKeys: boolean },
+    });
+    if (!user) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    }
+    const rawUser = user as { dashboardColumnKeys?: unknown };
+    const dashboardColumnKeys = rawUser.dashboardColumnKeys as unknown;
+    const keysArray = Array.isArray(dashboardColumnKeys) ? (dashboardColumnKeys as string[]) : [];
+    return NextResponse.json({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      dashboardColumnKeys: keysArray,
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error("Account GET error:", e);
+    return NextResponse.json(
+      { error: "Failed to load account.", detail: process.env.NODE_ENV === "development" ? message : undefined },
+      { status: 500 }
+    );
   }
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { id: true, email: true, name: true, role: true },
-  });
-  if (!user) {
-    return NextResponse.json({ error: "User not found" }, { status: 404 });
-  }
-  return NextResponse.json({
-    id: user.id,
-    email: user.email,
-    name: user.name,
-    role: user.role,
-  });
 }
 
 export async function PATCH(req: Request) {
+  try {
+    return await patchHandler(req);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error("Account PATCH unhandled error:", e);
+    return NextResponse.json(
+      { error: "Failed to update account.", detail: process.env.NODE_ENV === "development" ? message : undefined },
+      { status: 500 }
+    );
+  }
+}
+
+async function patchHandler(req: Request) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const body = await req.json().catch(() => ({}));
-  const { email, name, oldPassword, newPassword } = body as {
+  const { email, name, oldPassword, newPassword, dashboardColumnKeys: bodyColumnKeys } = body as {
     email?: string;
     name?: string;
     oldPassword?: string;
     newPassword?: string;
+    dashboardColumnKeys?: string[];
   };
 
-  const updates: { email?: string; name?: string; passwordHash?: string } = {};
+  const updates: {
+    email?: string;
+    name?: string | null;
+    passwordHash?: string;
+    dashboardColumnKeys?: string[] | null;
+  } = {};
   if (typeof email === "string" && email.trim()) {
     updates.email = email.trim().toLowerCase();
   }
@@ -68,6 +103,31 @@ export async function PATCH(req: Request) {
     updates.passwordHash = await bcrypt.hash(newPassword, 10);
   }
 
+  if (Array.isArray(bodyColumnKeys)) {
+    const role = getRole(session);
+    if (!role) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    try {
+      const viewable = await getViewableParamsForRole(role);
+      const viewableKeys = new Set(viewable.map((p) => p.key));
+      const invalid = bodyColumnKeys.filter((k) => typeof k !== "string" || !viewableKeys.has(k));
+      if (invalid.length > 0) {
+        return NextResponse.json(
+          { error: "dashboardColumnKeys contains keys you are not allowed to view." },
+          { status: 400 }
+        );
+      }
+      updates.dashboardColumnKeys = bodyColumnKeys;
+    } catch (e) {
+      console.error("Account PATCH getViewableParamsForRole failed:", e);
+      return NextResponse.json(
+        { error: "Failed to validate column preference. Please try again." },
+        { status: 500 }
+      );
+    }
+  }
+
   if (Object.keys(updates).length === 0) {
     return NextResponse.json(
       { error: "No valid fields to update." },
@@ -83,10 +143,28 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  await prisma.user.update({
-    where: { id: session.user.id },
-    data: updates,
-  });
+  const data: Prisma.UserUpdateInput & { dashboardColumnKeys?: string[] | null } = {};
+  if (updates.email !== undefined) data.email = updates.email;
+  if (updates.name !== undefined) data.name = updates.name;
+  if (updates.passwordHash !== undefined) data.passwordHash = updates.passwordHash;
+  if (updates.dashboardColumnKeys !== undefined) data.dashboardColumnKeys = updates.dashboardColumnKeys;
+
+  try {
+    await prisma.user.update({
+      where: { id: session.user.id },
+      data: data as Prisma.UserUpdateInput,
+    });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    console.error("Account PATCH update failed:", e);
+    return NextResponse.json(
+      {
+        error: "Failed to update account. Please try again.",
+        detail: process.env.NODE_ENV === "development" ? message : undefined,
+      },
+      { status: 500 }
+    );
+  }
 
   if (updates.email && updates.email !== before.email) {
     await logAudit({
@@ -122,9 +200,27 @@ export async function PATCH(req: Request) {
     });
   }
 
-  const updated = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    select: { id: true, email: true, name: true, role: true },
+  let updated;
+  try {
+    updated = await prisma.user.findUnique({
+      where: { id: session.user.id },
+      select: { id: true, email: true, name: true, role: true, dashboardColumnKeys: true } as { id: boolean; email: boolean; name: boolean; role: boolean; dashboardColumnKeys: boolean },
+    });
+  } catch (e) {
+    console.error("Account PATCH read after update failed:", e);
+    return NextResponse.json(
+      { error: "Account was updated but the response could not be read. Please refresh." },
+      { status: 500 }
+    );
+  }
+  if (!updated) return NextResponse.json({ error: "User not found" }, { status: 404 });
+  const rawUpdated = updated as { dashboardColumnKeys?: unknown };
+  const keysArray = Array.isArray(rawUpdated.dashboardColumnKeys) ? (rawUpdated.dashboardColumnKeys as string[]) : [];
+  return NextResponse.json({
+    id: updated.id,
+    email: updated.email,
+    name: updated.name,
+    role: updated.role,
+    dashboardColumnKeys: keysArray,
   });
-  return NextResponse.json(updated);
 }

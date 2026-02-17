@@ -21,7 +21,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const body = await req.json().catch(() => ({}));
-  const { key, label, type, order } = body as { key?: string; label?: string; type?: string; order?: number };
+  const { key, label, type, order, options } = body as {
+    key?: string;
+    label?: string;
+    type?: string;
+    order?: number;
+    options?: string;
+  };
   if (!key?.trim() || !label?.trim()) {
     return NextResponse.json(
       { error: "key and label are required." },
@@ -33,12 +39,21 @@ export async function POST(req: Request) {
   if (existing) {
     return NextResponse.json({ error: "A parameter with this key already exists." }, { status: 400 });
   }
+  const optionsNorm =
+    typeof options === "string"
+      ? options
+          .split(/[,\n]/)
+          .map((o) => o.trim())
+          .filter(Boolean)
+          .join(",")
+      : undefined;
   const param = await prisma.projectParameter.create({
     data: {
       key: keyNorm,
       label: String(label).trim(),
       type: type?.trim() || "text",
       order: typeof order === "number" ? order : 0,
+      options: optionsNorm ?? undefined,
     },
   });
   await logAudit({

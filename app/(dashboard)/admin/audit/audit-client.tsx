@@ -66,7 +66,7 @@ export function AuditClient() {
             {logs.map((log) => (
               <tr key={log.id} className="text-sm">
                 <td className="whitespace-nowrap px-4 py-2 text-zinc-500">
-                  {new Date(log.createdAt).toLocaleString()}
+                  {new Date(log.createdAt).toLocaleString("en-US")}
                 </td>
                 <td className="px-4 py-2 text-zinc-700">
                   {log.actor?.name ?? log.actor?.email ?? "—"}

@@ -2,7 +2,68 @@ import { prisma } from "./db";
 import { logAudit } from "./audit";
 import type { Role } from "@prisma/client";
 
-export async function getProjectsForRole(role: Role) {
+export type ViewableParam = { id: string; key: string; label: string };
+
+export async function getViewableParamsForRole(role: Role): Promise<ViewableParam[]> {
+  const params = await prisma.projectParameter.findMany({ orderBy: { order: "asc" } });
+  const perms = await prisma.fieldPermission.findMany({ where: { role } });
+  const viewableParamIds = new Set(
+    role === "ADMIN" ? params.map((p) => p.id) : perms.filter((p) => p.canView).map((p) => p.projectParameterId)
+  );
+  return params.filter((p) => viewableParamIds.has(p.id)).map((p) => ({ id: p.id, key: p.key, label: p.label }));
+}
+
+export async function getDashboardColumnKeys(userId: string): Promise<string[]> {
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { dashboardColumnKeys: true },
+  });
+  if (!user?.dashboardColumnKeys) return [];
+  const arr = user.dashboardColumnKeys as unknown;
+  return Array.isArray(arr) ? (arr as string[]) : [];
+}
+
+const DEFAULT_PAGE_SIZE = 10;
+const MAX_PAGE_SIZE = 100;
+
+export type GetProjectsOptions = {
+  page?: number;
+  limit?: number;
+  filters?: Record<string, string>;
+  allowedFilterKeys?: Set<string>;
+};
+
+function buildWhereFromFilters(
+  filters: Record<string, string> | undefined,
+  allowedFilterKeys: Set<string> | undefined
+):
+  | { status?: string; customFields?: { path: string[]; equals: string }; AND?: unknown[] }
+  | undefined {
+  if (!filters || !allowedFilterKeys || Object.keys(filters).length === 0) return undefined;
+  const conditions: Array<{ status?: string; customFields?: { path: string[]; equals: string } }> = [];
+  for (const [key, value] of Object.entries(filters)) {
+    const val = value?.trim();
+    if (!allowedFilterKeys.has(key) || val === "") continue;
+    if (key === "status") {
+      conditions.push({ status: val });
+    } else {
+      conditions.push({ customFields: { path: [key], equals: val } });
+    }
+  }
+  if (conditions.length === 0) return undefined;
+  if (conditions.length === 1) return conditions[0];
+  return { AND: conditions };
+}
+
+export async function getProjectsCountForRole(
+  _role: Role,
+  options?: { filters?: Record<string, string>; allowedFilterKeys?: Set<string> }
+): Promise<number> {
+  const where = buildWhereFromFilters(options?.filters, options?.allowedFilterKeys);
+  return prisma.project.count({ where: where ?? undefined });
+}
+
+export async function getProjectsForRole(role: Role, options?: GetProjectsOptions) {
   const params = await prisma.projectParameter.findMany({ orderBy: { order: "asc" } });
   const perms = await prisma.fieldPermission.findMany({
     where: { role },
@@ -10,8 +71,15 @@ export async function getProjectsForRole(role: Role) {
   const viewableParamIds = new Set(
     role === "ADMIN" ? params.map((p) => p.id) : perms.filter((p) => p.canView).map((p) => p.projectParameterId)
   );
+  const page = Math.max(1, options?.page ?? 1);
+  const limit = Math.min(MAX_PAGE_SIZE, Math.max(1, options?.limit ?? DEFAULT_PAGE_SIZE));
+  const skip = (page - 1) * limit;
+  const where = buildWhereFromFilters(options?.filters, options?.allowedFilterKeys);
   const projects = await prisma.project.findMany({
+    where: where ?? undefined,
     orderBy: { updatedAt: "desc" },
+    skip,
+    take: limit,
   });
   return projects.map((p) => {
     const custom = (p.customFields as Record<string, unknown>) ?? {};
@@ -45,8 +113,8 @@ export async function getProjectByIdForRole(projectId: string, role: Role, inclu
   const custom = (project.customFields as Record<string, unknown>) ?? {};
   const filtered: Record<string, unknown> = {};
   for (const param of params) {
-    if (viewableParamIds.has(param.id) && param.key in custom) {
-      filtered[param.key] = custom[param.key];
+    if (viewableParamIds.has(param.id)) {
+      filtered[param.key] = custom[param.key] ?? null;
     }
   }
   const result: Record<string, unknown> = {
@@ -81,6 +149,11 @@ export async function createProject(
   for (const [key, value] of Object.entries(rest)) {
     if (key !== "confidentialNotes" && canEditKeys.has(key)) {
       customFields[key] = value;
+    }
+  }
+  for (const key of canEditKeys) {
+    if (!(key in customFields)) {
+      customFields[key] = null;
     }
   }
   const project = await prisma.project.create({

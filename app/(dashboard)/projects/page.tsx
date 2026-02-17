@@ -1,20 +1,69 @@
 import { auth } from "@/auth";
-import { getProjectsForRole } from "@/lib/project-service";
+import { getProjectsForRole, getProjectsCountForRole, getViewableParamsForRole, getDashboardColumnKeys } from "@/lib/project-service";
 import { getRole } from "@/lib/auth";
 import Link from "next/link";
+import { ProjectsTableClient } from "./projects-table-client";
 
-export default async function ProjectsPage() {
+const DEFAULT_PAGE = 1;
+const DEFAULT_LIMIT = 10;
+const PAGINATION_KEYS = new Set(["page", "limit"]);
+
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
+
+function parseFilters(
+  params: Record<string, string | string[] | undefined>,
+  allowedFilterKeys: Set<string>
+): Record<string, string> {
+  const filters: Record<string, string> = {};
+  for (const [key, value] of Object.entries(params)) {
+    if (PAGINATION_KEYS.has(key) || !allowedFilterKeys.has(key)) continue;
+    const v = Array.isArray(value) ? value[0] : value;
+    if (typeof v === "string" && v.trim() !== "") filters[key] = v.trim();
+  }
+  return filters;
+}
+
+export default async function ProjectsPage({ searchParams }: { searchParams: SearchParams }) {
   const session = await auth();
-  if (!session?.user) return null;
+  if (!session?.user?.id) return null;
   const role = getRole(session);
   if (!role) return null;
-  let projects: Awaited<ReturnType<typeof getProjectsForRole>>;
+
+  const [viewableResult, columnPrefResult] = await Promise.allSettled([
+    getViewableParamsForRole(role),
+    getDashboardColumnKeys(session.user.id),
+  ]);
+  const viewableParams: Awaited<ReturnType<typeof getViewableParamsForRole>> =
+    viewableResult.status === "fulfilled" ? viewableResult.value : [];
+  const columnPref: string[] = columnPrefResult.status === "fulfilled" ? columnPrefResult.value : [];
+  if (viewableResult.status === "rejected") console.error("Failed to load viewable params:", viewableResult.reason);
+  if (columnPrefResult.status === "rejected") console.error("Failed to load dashboard column preference:", columnPrefResult.reason);
+
+  const allowedFilterKeys = new Set<string>(["status", ...viewableParams.map((p) => p.key)]);
+  const params = await searchParams;
+  const page = Math.max(1, parseInt(String(params?.page ?? ""), 10) || DEFAULT_PAGE);
+  const limit = Math.min(100, Math.max(1, parseInt(String(params?.limit ?? ""), 10) || DEFAULT_LIMIT));
+  const filters = parseFilters(params ?? {}, allowedFilterKeys);
+
+  let projects: Awaited<ReturnType<typeof getProjectsForRole>> = [];
+  let total = 0;
   try {
-    projects = await getProjectsForRole(role);
-  } catch {
-    projects = [];
+    [projects, total] = await Promise.all([
+      getProjectsForRole(role, { page, limit, filters, allowedFilterKeys }),
+      getProjectsCountForRole(role, { filters, allowedFilterKeys }),
+    ]);
+  } catch (e) {
+    console.error("Failed to load projects:", e);
   }
+
   const projectList = Array.isArray(projects) ? projects : [];
+  const totalPages = Math.ceil(total / limit);
+  const columnsToShow =
+    columnPref.length > 0
+      ? columnPref
+          .map((key) => viewableParams.find((p) => p.key === key))
+          .filter(Boolean) as Awaited<ReturnType<typeof getViewableParamsForRole>>
+      : viewableParams;
 
   return (
     <div>
@@ -27,38 +76,19 @@ export default async function ProjectsPage() {
           New project
         </Link>
       </div>
-      <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white shadow-sm">
-        <table className="min-w-full divide-y divide-zinc-200">
-          <thead className="bg-zinc-50">
-            <tr>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-zinc-500">Name</th>
-              <th className="px-4 py-3 text-left text-xs font-medium uppercase text-zinc-500">Status</th>
-              <th className="px-4 py-3 text-right text-xs font-medium uppercase text-zinc-500">Updated</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-200">
-            {projectList.map((p) => (
-              <tr key={(p as { id: string }).id} className="hover:bg-zinc-50">
-                <td className="px-4 py-3">
-                  <Link
-                    href={`/projects/${(p as { id: string }).id}`}
-                    className="font-medium text-blue-600 hover:underline"
-                  >
-                    {(p as { name?: string }).name}
-                  </Link>
-                </td>
-                <td className="px-4 py-3 text-zinc-600">{(p as { status?: string }).status}</td>
-                <td className="px-4 py-3 text-right text-sm text-zinc-500">
-                  {new Date((p as { updatedAt?: string }).updatedAt ?? "").toLocaleDateString()}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {projectList.length === 0 && (
-          <p className="px-4 py-8 text-center text-zinc-500">No projects yet.</p>
-        )}
-      </div>
+      <ProjectsTableClient
+        projects={projectList}
+        viewableParams={viewableParams}
+        columnsToShow={columnsToShow}
+        pagination={{
+          total,
+          page,
+          limit,
+          totalPages,
+        }}
+        currentFilters={filters}
+        filterableColumns={[{ key: "status", label: "Status" }, ...columnsToShow]}
+      />
     </div>
   );
 }

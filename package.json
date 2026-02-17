@@ -9,6 +9,7 @@
     "lint": "eslint",
     "postinstall": "prisma generate",
     "db:seed": "npx tsx prisma/seed.ts",
+    "db:seed:bulk": "npx tsx prisma/seed_bulk.ts",
     "db:studio": "cross-env NODE_ENV=production npx prisma studio --schema=prisma/schema.prisma"
   },
   "prisma": {

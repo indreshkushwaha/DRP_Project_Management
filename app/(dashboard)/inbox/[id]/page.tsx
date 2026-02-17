@@ -32,7 +32,7 @@ export default async function MessageDetailPage({
         </div>
         <p className="text-sm text-zinc-500">
           From {message.sender.name ?? message.sender.email} ·{" "}
-          {new Date(message.createdAt).toLocaleString()}
+          {new Date(message.createdAt).toLocaleString("en-US")}
         </p>
         <div className="mt-4 whitespace-pre-wrap text-zinc-700">{message.body}</div>
       </div>

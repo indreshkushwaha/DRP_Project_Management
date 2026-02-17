@@ -13,12 +13,18 @@ export default function AccountPage() {
 
   useEffect(() => {
     fetch("/api/account")
-      .then((r) => r.json())
-      .then((data) => {
-        if (data.email) {
+      .then(async (r) => {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) {
+          setMessage({ type: "err", text: (data as { error?: string }).error ?? "Failed to load profile." });
+          return;
+        }
+        if (data.email != null) {
           setProfile(data);
           setEmail(data.email);
           setName(data.name ?? "");
+        } else {
+          setMessage({ type: "err", text: "Failed to load profile." });
         }
       })
       .catch(() => setMessage({ type: "err", text: "Failed to load profile." }));
@@ -61,7 +67,10 @@ export default function AccountPage() {
     setLoading(false);
   }
 
-  if (!profile) return <div className="text-zinc-500">Loading…</div>;
+  if (!profile) {
+    if (message) return <p className="text-red-600" role="alert">{message.text}</p>;
+    return <div className="text-zinc-500">Loading…</div>;
+  }
 
   return (
     <div>
