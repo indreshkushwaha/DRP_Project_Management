@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { ViewableParam } from "@/lib/project-service";
 
-type ProjectRow = Record<string, unknown> & {
+export type ProjectRow = Record<string, unknown> & {
   id: string;
   name?: string;
   status?: string;

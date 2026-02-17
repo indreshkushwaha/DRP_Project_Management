@@ -2,7 +2,7 @@ import { auth } from "@/auth";
 import { getProjectsForRole, getProjectsCountForRole, getViewableParamsForRole, getDashboardColumnKeys } from "@/lib/project-service";
 import { getRole } from "@/lib/auth";
 import Link from "next/link";
-import { ProjectsTableClient } from "./projects-table-client";
+import { ProjectsTableClient, type ProjectRow } from "./projects-table-client";
 
 const DEFAULT_PAGE = 1;
 const DEFAULT_LIMIT = 10;
@@ -60,7 +60,7 @@ export default async function ProjectsPage({ searchParams }: { searchParams: Sea
     ...p,
     createdAt: p.createdAt instanceof Date ? p.createdAt.toISOString() : String(p.createdAt ?? ""),
     updatedAt: p.updatedAt instanceof Date ? p.updatedAt.toISOString() : String(p.updatedAt ?? ""),
-  }));
+  })) as ProjectRow[];
   const totalPages = Math.ceil(total / limit);
   const columnsToShow =
     columnPref.length > 0
