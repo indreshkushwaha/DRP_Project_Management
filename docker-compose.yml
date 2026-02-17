@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: projectman-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: projectman
+      POSTGRES_PASSWORD: projectman
+      POSTGRES_DB: projectman
+    ports:
+      # Use 5433 on host so default 5432 can stay for other apps
+      - "5433:5432"
+    volumes:
+      - projectman_pgdata:/var/lib/postgresql/data
+
+volumes:
+  projectman_pgdata:

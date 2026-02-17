@@ -1,0 +1,112 @@
+// Project Management Dashboard - Prisma schema
+// PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  STAFF
+}
+
+enum MessagePriority {
+  NORMAL
+  IMPORTANT
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String
+  name         String?
+  role         Role
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  sentMessages    Message[]       @relation("MessageSender")
+  notifications   Notification[]
+  auditLogs       AuditLog[]      @relation("AuditActor")
+}
+
+model Project {
+  id               String    @id @default(cuid())
+  name             String
+  status           String    @default("pending") // e.g. pending | in_progress | completed
+  confidentialNotes String?  @default("")        // admin-only
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  // Dynamic fields stored in JSON; keys driven by ProjectParameter
+  customFields     Json?     @default("{}")
+}
+
+model ProjectParameter {
+  id        String   @id @default(cuid())
+  key       String   @unique  // e.g. dueDate, assignee
+  label     String
+  type      String   // text, number, date, select
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  permissions FieldPermission[]
+}
+
+model FieldPermission {
+  id                 String   @id @default(cuid())
+  projectParameterId String
+  role               Role
+  canView            Boolean  @default(false)
+  canEdit            Boolean  @default(false)
+  canUpdate          Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  projectParameter ProjectParameter @relation(fields: [projectParameterId], references: [id], onDelete: Cascade)
+  @@unique([projectParameterId, role])
+}
+
+model Message {
+  id        String          @id @default(cuid())
+  senderId  String
+  title     String
+  body      String
+  priority  MessagePriority @default(NORMAL)
+  createdAt DateTime       @default(now())
+
+  sender        User           @relation("MessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+  notifications Notification[]
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  messageId String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  @@unique([userId, messageId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String
+  entity    String   // user | project | message | parameter | permission | account
+  entityId  String?  // target record id
+  action    String   // create | update | delete
+  fieldName String?
+  oldValue  String?
+  newValue  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  actor User @relation("AuditActor", fields: [actorId], references: [id], onDelete: Cascade)
+}

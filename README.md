@@ -1,36 +1,57 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Project Management Dashboard
 
-## Getting Started
+Next.js app with Prisma, PostgreSQL, and NextAuth. Three roles: Admin, Manager, Staff.
 
-First, run the development server:
+## Setup
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. **Start local PostgreSQL with Docker** (uses port **5433** on the host so the default 5432 is free for other apps):
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+   ```bash
+   docker-compose up -d
+   ```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+2. Copy `.env.example` to `.env` and/or `.env.local` and set:
+   - `DATABASE_URL`: e.g. `postgresql://projectman:projectman@localhost:5433/projectman` (Docker Postgres on port 5433). Prisma CLI uses `.env`; the app also loads `.env.local`.
+   - `AUTH_SECRET`: Run `openssl rand -base64 32` to generate one.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+3. Install dependencies:
 
-## Learn More
+   ```bash
+   npm install
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+4. Run migrations:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+   ```bash
+   npx prisma migrate dev --name init
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+5. Seed the admin user (optional):
 
-## Deploy on Vercel
+   ```bash
+   npm run db:seed
+   ```
+   Default: `admin@example.com` / `admin123`. Override with `SEED_ADMIN_EMAIL` and `SEED_ADMIN_PASSWORD`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+6. Start the app:
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+   ```bash
+   npm run dev
+   ```
+
+Open [http://localhost:3000](http://localhost:3000). Sign in with the seeded admin or create users via Admin → Users.
+
+## Features
+
+- **Login**: Email and password (English).
+- **Account**: Update own email, name, and password (old + new required for password change).
+- **Dashboard**: Project progress and counts by status.
+- **Projects**: List, create, edit; fields driven by admin-defined parameters and permissions.
+- **Inbox**: Messages with priority (Normal / Important); filter by priority.
+- **Admin**: Users (create/manage Managers and Staff), Project parameters, Field permissions (checkboxes per role), Confidential notes per project, Audit log (every operation stored in DB).
+
+## Tech
+
+- Next.js (App Router), TypeScript, Tailwind CSS
+- Prisma 6 + PostgreSQL (standard driver, no adapter)
+- NextAuth v5 (credentials, JWT session)
